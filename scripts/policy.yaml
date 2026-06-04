@@ -1,0 +1,10 @@
+# Initial SOL policy file. Source of truth lives in /etc/sol/policy.yaml on the host.
+# Week 1 ships expiry defaults + an empty rules block. Cross-rules land Week 2-4.
+version: 1
+expiry_defaults:
+  money: 14400        # 4h
+  tenant: 28800       # 8h
+  standard: 86400     # 24h
+  onboarding: 259200  # 72h
+  read_only: 3600     # 1h
+rules: []
