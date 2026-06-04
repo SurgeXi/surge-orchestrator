@@ -45,6 +45,15 @@ class DispatchResult(BaseModel):
     stderr: str | None = None
     exit_code: int | None = None
     summary: str | None = None
+    # Phase 3.3 Week 3: free-form payload from a downstream executor
+    # (e.g. Broker's DispatchResult.data + audit_id + approval_id).
+    # Optional so existing executors that don't produce structured data
+    # (file ops, ssh) keep returning the lean shape.
+    data: dict[str, Any] | None = None
+    # Broker's own audit row id when SOL forwarded to broker — useful
+    # for cross-referencing legacy audit during the migration window.
+    broker_audit_id: str | None = None
+    capability: str | None = None
 
 
 class DispatchResponse(BaseModel):
