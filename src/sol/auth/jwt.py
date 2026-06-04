@@ -1,15 +1,14 @@
 """JWT issue + verify for human admins (60 min TTL per spec §10 #1).
 
-Signing material model:
-  - Production: Ed25519 keypair under /etc/sol/keys/jwt_signing.{key,pub}.
-    Algorithm "EdDSA". Same key model as GEOpro Component 3.
-  - Dev: HS256 with a static dev secret. Never used when SOL_ENVIRONMENT=production.
+Key model: see auth/keystore.py — supports rotation (current + prev-1/prev-2).
+Algorithm: EdDSA in production, HS256 in dev fallback only.
 
-Backend: PyJWT (supports EdDSA via the `cryptography` package).
+Token revocation: every JWT carries a `jti` claim; the verifier consults the
+revoked_tokens table (with in-memory cache) and rejects revoked tokens.
 """
 from __future__ import annotations
 
-import os
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -17,33 +16,8 @@ import jwt
 from fastapi import HTTPException
 
 from ..settings import get_settings
-
-_DEFAULT_DEV_SECRET = "dev-only-not-for-production-jwt-hmac-secret-32-chars-min!"
-
-
-def _load_signing_material() -> tuple[str, str]:
-    """Return (private_key_pem_or_hmac, algorithm)."""
-    s = get_settings()
-    key_path = s.jwt_signing_key_path
-    if os.path.isfile(key_path):
-        with open(key_path) as f:
-            return f.read(), "EdDSA"
-    if s.environment == "production":
-        raise RuntimeError(
-            f"JWT signing key not found at {key_path} (production requires Ed25519 key)"
-        )
-    return _DEFAULT_DEV_SECRET, "HS256"
-
-
-def _load_verify_material() -> tuple[str, str]:
-    s = get_settings()
-    pub = s.jwt_signing_pubkey_path
-    if os.path.isfile(pub):
-        with open(pub) as f:
-            return f.read(), "EdDSA"
-    if s.environment == "production":
-        raise RuntimeError(f"JWT public key not found at {pub}")
-    return _DEFAULT_DEV_SECRET, "HS256"
+from .keystore import current_signing_key, verify_key_for
+from .revocation import is_revoked
 
 
 @dataclass
@@ -51,16 +25,24 @@ class AdminPrincipal:
     username: str
     sol_role: str
     allowed_tenants: list[str]
+    jti: str | None = None
 
 
 class AdminJwtAuth:
     """Issue + verify human-admin JWTs."""
 
     @staticmethod
-    def issue(username: str, sol_role: str, allowed_tenants: list[str] | None = None) -> str:
+    def issue(
+        username: str,
+        sol_role: str,
+        allowed_tenants: list[str] | None = None,
+        jti: str | None = None,
+    ) -> tuple[str, str]:
+        """Return (token, jti). Caller persists jti to sol.issued_tokens."""
         s = get_settings()
-        key, alg = _load_signing_material()
+        km = current_signing_key()
         now = datetime.now(UTC)
+        jti = jti or str(uuid.uuid4())
         payload = {
             "sub": username,
             "sol_role": sol_role,
@@ -68,18 +50,52 @@ class AdminJwtAuth:
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(minutes=s.jwt_admin_ttl_minutes)).timestamp()),
             "iss": "sol",
+            "jti": jti,
+            "kind": "admin",
         }
-        return jwt.encode(payload, key, algorithm=alg)
+        token = jwt.encode(
+            payload, km.private_pem, algorithm=km.algorithm, headers={"kid": km.kid}
+        )
+        return token, jti
 
     @staticmethod
     def verify(token: str) -> AdminPrincipal:
-        key, alg = _load_verify_material()
         try:
-            data = jwt.decode(token, key, algorithms=[alg], issuer="sol")
+            unverified_header = jwt.get_unverified_header(token)
         except jwt.PyJWTError as e:
-            raise HTTPException(401, detail=f"invalid admin JWT: {e}") from None
+            raise HTTPException(401, detail=f"invalid admin JWT header: {e}") from None
+        kid = unverified_header.get("kid")
+        # Try the kid'd key first (fast path), then fall back to every other
+        # known verify key — the kid is a hint, not a contract, because
+        # rotation reuses the "current" name across keys.
+        primary = verify_key_for(kid)
+        seen_kids = {k.kid for k in primary}
+        fallbacks = [k for k in verify_key_for(None) if k.kid not in seen_kids]
+        candidates = primary + fallbacks
+        last_err: Exception | None = None
+        data = None
+        for km in candidates:
+            try:
+                data = jwt.decode(
+                    token, km.public_pem, algorithms=[km.algorithm], issuer="sol"
+                )
+                break
+            except jwt.PyJWTError as e:
+                last_err = e
+                continue
+        if data is None:
+            raise HTTPException(401, detail=f"invalid admin JWT: {last_err}") from None
+
+        if data.get("kind") not in (None, "admin"):
+            raise HTTPException(401, detail="wrong token kind for admin path")
+
+        jti = data.get("jti")
+        if jti and is_revoked(jti):
+            raise HTTPException(401, detail="token revoked")
+
         return AdminPrincipal(
             username=data["sub"],
             sol_role=data.get("sol_role", "viewer"),
             allowed_tenants=data.get("allowed_tenants", ["*"]),
+            jti=jti,
         )

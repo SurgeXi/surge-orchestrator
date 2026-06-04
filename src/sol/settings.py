@@ -39,14 +39,30 @@ class Settings(BaseSettings):
     jwt_callback_ttl_minutes: int = 15
     jwt_signing_key_path: str = "/etc/sol/keys/jwt_signing.key"
     jwt_signing_pubkey_path: str = "/etc/sol/keys/jwt_signing.pub"
+    # Rotation: SOL accepts JWTs signed by any *.pub in this dir; issues with current.
+    jwt_keys_dir: str = "/etc/sol/keys"
+    jwt_current_key_name: str = "current"  # current.key + current.pub
     service_tokens_file: str = "/etc/sol/service-tokens.env"
 
     # ---- mTLS (Phase 3 hardening) ----
     mtls_enabled: bool = False
-    mtls_cert_path: str = "/etc/sol/keys/sol_server.crt"
-    mtls_key_path: str = "/etc/sol/keys/sol_server.key"
-    mtls_ca_path: str = "/etc/sol/keys/sol_ca.crt"
+    mtls_cert_path: str = "/etc/sol/server/sol-server.crt"
+    mtls_key_path: str = "/etc/sol/server/sol-server.key"
+    mtls_ca_path: str = "/etc/sol/ca/sol-ca.crt"
     mtls_port: int = 9321
+    mtls_callers_yaml_path: str = "/etc/sol/mtls-callers.yaml"
+    # Shared secret nginx echoes in X-SOL-Nginx-Token to prove origin.
+    # If the file is missing, the secret check is skipped (legacy fallback).
+    # File MUST be mode 640 root:todds.
+    nginx_shared_secret_path: str = "/etc/sol/nginx-shared-secret"
+    # Loopback IP check is a secondary defense — disabled by default because
+    # uvicorn's proxy_headers middleware rewrites the apparent peer IP from
+    # X-Forwarded-For. Enable for hardened environments where you've also
+    # disabled proxy_headers in uvicorn.
+    mtls_require_loopback: bool = False
+
+    # ---- token revocation cache ----
+    revoked_token_cache_ttl_seconds: int = 300  # 5 min
 
     # ---- policy ----
     policy_yaml_path: str = "/etc/sol/policy.yaml"

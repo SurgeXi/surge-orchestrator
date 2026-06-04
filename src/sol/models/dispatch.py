@@ -42,6 +42,8 @@ class Dispatch(Base):
     result_status: Mapped[str | None] = mapped_column(String, nullable=True)
     result_summary: Mapped[str | None] = mapped_column(String, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Which auth path the caller used: mtls | jwt-service | jwt-admin
+    auth_method: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
