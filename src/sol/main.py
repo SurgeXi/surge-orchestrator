@@ -8,7 +8,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import Response
 
 from .admin import router as admin_router
-from .api import approvals, audit, capabilities, dispatch, health, policies
+from .api import approvals, audit, capabilities, dispatch, health, policies, tokens
 from .observability.logging import configure_logging, get_logger
 from .observability.metrics import init_metrics
 from .policy.cache import PolicyCache
@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI):
         enforce=s.enforce,
         shadow_enabled=s.shadow_enabled,
         environment=s.environment,
+        mtls_enabled=s.mtls_enabled,
+        mtls_port=s.mtls_port,
     )
     yield
     log.info("sol.shutdown")
@@ -40,7 +42,7 @@ def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(
         title="Surge Orchestration Layer",
-        version="0.1.0",
+        version="0.2.0",
         description="Unified dispatch + policy + audit surface.",
         lifespan=lifespan,
         docs_url="/docs" if s.environment != "production" else None,
@@ -53,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(approvals.router, prefix="/v1/sol")
     app.include_router(audit.router, prefix="/v1/sol")
     app.include_router(policies.router, prefix="/v1/sol")
+    app.include_router(tokens.router, prefix="/v1/sol")
     app.include_router(admin_router.router)
 
     @app.get("/metrics", include_in_schema=False)

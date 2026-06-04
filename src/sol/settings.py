@@ -39,14 +39,24 @@ class Settings(BaseSettings):
     jwt_callback_ttl_minutes: int = 15
     jwt_signing_key_path: str = "/etc/sol/keys/jwt_signing.key"
     jwt_signing_pubkey_path: str = "/etc/sol/keys/jwt_signing.pub"
+    # Rotation: SOL accepts JWTs signed by any *.pub in this dir; issues with current.
+    jwt_keys_dir: str = "/etc/sol/keys"
+    jwt_current_key_name: str = "current"  # current.key + current.pub
     service_tokens_file: str = "/etc/sol/service-tokens.env"
 
     # ---- mTLS (Phase 3 hardening) ----
     mtls_enabled: bool = False
-    mtls_cert_path: str = "/etc/sol/keys/sol_server.crt"
-    mtls_key_path: str = "/etc/sol/keys/sol_server.key"
-    mtls_ca_path: str = "/etc/sol/keys/sol_ca.crt"
+    mtls_cert_path: str = "/etc/sol/server/sol-server.crt"
+    mtls_key_path: str = "/etc/sol/server/sol-server.key"
+    mtls_ca_path: str = "/etc/sol/ca/sol-ca.crt"
     mtls_port: int = 9321
+    mtls_callers_yaml_path: str = "/etc/sol/mtls-callers.yaml"
+    # When True (default), SOL only honors mTLS headers from 127.0.0.1 — i.e.
+    # the nginx terminator. Set False only for unit tests using TestClient.
+    mtls_require_loopback: bool = True
+
+    # ---- token revocation cache ----
+    revoked_token_cache_ttl_seconds: int = 300  # 5 min
 
     # ---- policy ----
     policy_yaml_path: str = "/etc/sol/policy.yaml"
