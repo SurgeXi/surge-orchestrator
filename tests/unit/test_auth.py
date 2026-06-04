@@ -6,18 +6,22 @@ from sol.auth.service_tokens import ServiceTokenAuth
 
 
 def test_admin_jwt_roundtrip():
-    tok = AdminJwtAuth.issue("todd", "admin", ["*"])
+    tok, jti = AdminJwtAuth.issue("todd", "admin", ["*"])
+    assert jti  # non-empty
     p = AdminJwtAuth.verify(tok)
     assert p.username == "todd"
     assert p.sol_role == "admin"
     assert p.allowed_tenants == ["*"]
+    assert p.jti == jti
 
 
 def test_service_token_roundtrip():
-    tok = ServiceTokenAuth.issue("brain", ["timesavedap", "surgexi"], ["dispatch"])
+    tok, jti = ServiceTokenAuth.issue("brain", ["timesavedap", "surgexi"], ["dispatch"])
+    assert jti
     p = ServiceTokenAuth.verify(tok)
     assert p.service_name == "brain"
     assert "timesavedap" in p.allowed_tenants
+    assert p.jti == jti
 
 
 def test_service_token_rejected_as_admin():

@@ -1,10 +1,11 @@
-"""Service-token issuance + verification (90-day Ed25519 JWT per spec §4).
+"""Service-token issuance + verification (90-day EdDSA JWT per spec §4).
 
-Backend: PyJWT with EdDSA via cryptography.
+Same key model as admin JWT (auth/keystore.py — supports rotation).
+Carries `jti` for revocation; verifier checks revoked_tokens.
 """
 from __future__ import annotations
 
-import os
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -12,26 +13,8 @@ import jwt
 from fastapi import HTTPException
 
 from ..settings import get_settings
-
-_DEFAULT_DEV_SECRET = "dev-only-service-token-hmac-secret-32-characters-minimum!"
-
-
-def _signing() -> tuple[str, str]:
-    s = get_settings()
-    if os.path.isfile(s.jwt_signing_key_path):
-        return open(s.jwt_signing_key_path).read(), "EdDSA"
-    if s.environment == "production":
-        raise RuntimeError("service-token signing key missing")
-    return _DEFAULT_DEV_SECRET, "HS256"
-
-
-def _verifying() -> tuple[str, str]:
-    s = get_settings()
-    if os.path.isfile(s.jwt_signing_pubkey_path):
-        return open(s.jwt_signing_pubkey_path).read(), "EdDSA"
-    if s.environment == "production":
-        raise RuntimeError("service-token public key missing")
-    return _DEFAULT_DEV_SECRET, "HS256"
+from .keystore import current_signing_key, verify_key_for
+from .revocation import is_revoked
 
 
 @dataclass
@@ -39,6 +22,7 @@ class ServicePrincipal:
     service_name: str
     allowed_tenants: list[str]
     claims: list[str] = field(default_factory=list)
+    jti: str | None = None
 
 
 class ServiceTokenAuth:
@@ -47,10 +31,13 @@ class ServiceTokenAuth:
         service_name: str,
         allowed_tenants: list[str],
         claims: list[str] | None = None,
-    ) -> str:
+        jti: str | None = None,
+    ) -> tuple[str, str]:
+        """Return (token, jti). Caller persists jti to sol.issued_tokens."""
         s = get_settings()
-        key, alg = _signing()
+        km = current_signing_key()
         now = datetime.now(UTC)
+        jti = jti or str(uuid.uuid4())
         payload = {
             "sub": service_name,
             "service_name": service_name,
@@ -60,20 +47,50 @@ class ServiceTokenAuth:
             "exp": int((now + timedelta(days=s.jwt_service_ttl_days)).timestamp()),
             "iss": "sol",
             "kind": "service",
+            "jti": jti,
         }
-        return jwt.encode(payload, key, algorithm=alg)
+        token = jwt.encode(
+            payload, km.private_pem, algorithm=km.algorithm, headers={"kid": km.kid}
+        )
+        return token, jti
 
     @staticmethod
     def verify(token: str) -> ServicePrincipal:
-        key, alg = _verifying()
         try:
-            data = jwt.decode(token, key, algorithms=[alg], issuer="sol")
+            unverified_header = jwt.get_unverified_header(token)
         except jwt.PyJWTError as e:
-            raise HTTPException(401, detail=f"invalid service token: {e}") from None
+            raise HTTPException(401, detail=f"invalid service token header: {e}") from None
+        kid = unverified_header.get("kid")
+        # Try kid'd key first; fall through to every other (rotation cycles
+        # the "current" name so kid alone doesn't pin a unique key).
+        primary = verify_key_for(kid)
+        seen_kids = {k.kid for k in primary}
+        fallbacks = [k for k in verify_key_for(None) if k.kid not in seen_kids]
+        candidates = primary + fallbacks
+        last_err: Exception | None = None
+        data = None
+        for km in candidates:
+            try:
+                data = jwt.decode(
+                    token, km.public_pem, algorithms=[km.algorithm], issuer="sol"
+                )
+                break
+            except jwt.PyJWTError as e:
+                last_err = e
+                continue
+        if data is None:
+            raise HTTPException(401, detail=f"invalid service token: {last_err}") from None
+
         if data.get("kind") != "service":
             raise HTTPException(401, detail="not a service token")
+
+        jti = data.get("jti")
+        if jti and is_revoked(jti):
+            raise HTTPException(401, detail="token revoked")
+
         return ServicePrincipal(
             service_name=data["service_name"],
             allowed_tenants=data.get("allowed_tenants", []),
             claims=data.get("claims", []),
+            jti=jti,
         )

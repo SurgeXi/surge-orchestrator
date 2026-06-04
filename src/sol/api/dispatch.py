@@ -42,7 +42,7 @@ def dispatch(
     # tenant guard
     ctx_tenant = payload.context.tenant_id
     if (
-        caller.principal_kind == "service"
+        caller.principal_kind in ("service", "mtls")
         and ctx_tenant not in caller.allowed_tenants
         and "*" not in caller.allowed_tenants
     ):
@@ -82,6 +82,7 @@ def dispatch(
         result_status=None,
         result_summary=None,
         latency_ms=None,
+        auth_method=caller.auth_method,
     )
     db.add(row)
     db.commit()
@@ -103,6 +104,8 @@ def dispatch(
         actor=payload.context.actor.id,
         actor_tier=payload.context.actor.tier,
         decision=decision,
+        auth_method=caller.auth_method,
+        client_cn=caller.principal_id if caller.principal_kind == "mtls" else None,
         latency_ms=int(elapsed * 1000),
     )
 
