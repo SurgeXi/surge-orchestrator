@@ -32,10 +32,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
+from ..executors.broker import execute_broker
 from ..models import Capability, Dispatch
 from ..observability.logging import get_logger
 from ..observability.metrics import dispatch_latency_seconds, dispatches_total
-from ..schemas.dispatch import DispatchRequest, DispatchResponse
+from ..schemas.dispatch import DispatchRequest, DispatchResponse, DispatchResult
 from ..services.approvals import create_and_deliver, poll_for_decision
 from ..settings import get_settings
 from .deps import CallerContext, get_caller
@@ -48,6 +49,11 @@ log = get_logger(__name__)
 # Brain's existing tool-call payloads (which carry args["risk"]) need
 # no translation here.
 _HUMAN_RISK_BANDS = {"mutate", "remote", "destructive"}
+
+# Capability rows whose handler_kind == "broker". When SOL picks a
+# decision of approved / human-approved-callback for one of these caps,
+# we forward to the broker executor and capture the result on the row.
+_BROKER_CAPABILITIES = {"broker_capability", "broker_dispatch"}
 
 
 def _canonical_args_hash(args: dict) -> str:
@@ -172,6 +178,64 @@ def dispatch(
                 row.decision_reason = reason
                 db.commit()
 
+    # ---------- Phase 3.3: forward approved broker dispatches ----------
+    # When the dispatch's capability is one of the broker-handled ones
+    # and the decision came out APPROVED (auto-policy or human-approved
+    # callback), forward to Broker's executor and record the result on
+    # the audit row. DENIED / QUEUED outcomes do NOT execute.
+    executor_result: DispatchResult | None = None
+    if (
+        not shadow_mode
+        and payload.capability in _BROKER_CAPABILITIES
+        and decision == "approved"
+    ):
+        target_cap = str(payload.args.get("target") or "").strip()
+        target_params = payload.args.get("params") or {}
+        if not target_cap:
+            row.result_status = "error"
+            row.result_summary = "broker dispatch missing args.target"
+            db.commit()
+        else:
+            br = execute_broker(
+                target_cap,
+                target_params if isinstance(target_params, dict) else {},
+                tenant_id=ctx_tenant,
+                actor_id=payload.context.actor.id,
+                trace_id=payload.context.trace_id,
+                timeout_s=float(payload.args.get("timeout_s") or 0) or None,
+            )
+            outcome = str(br.get("outcome") or "error")
+            summary = str(br.get("summary") or "")[:1024]
+            from datetime import datetime, timezone
+
+            row.executed_at = datetime.now(tz=timezone.utc)
+            row.result_status = outcome
+            row.result_summary = summary
+            db.commit()
+            executor_result = DispatchResult(
+                status=outcome,
+                summary=summary or None,
+                stdout=None,
+                stderr=None,
+                exit_code=None,
+                data=br.get("data") if isinstance(br.get("data"), dict) else None,
+                broker_audit_id=(
+                    str(br.get("audit_id")) if br.get("audit_id") else None
+                ),
+                capability=target_cap,
+            )
+            # Surface the broker's full payload back to the caller so
+            # Brain's surge_invoke can pass it to the agent loop unchanged.
+            # We stash it under result_summary if small; the full dict
+            # rides on the response model only (we keep result_summary
+            # a short string for SQL friendliness).
+            log.info(
+                "sol.executor.broker.routed target=%s outcome=%s tenant=%s",
+                target_cap,
+                outcome,
+                ctx_tenant,
+            )
+
     elapsed = time.monotonic() - started
     dispatch_latency_seconds.labels(
         tenant=ctx_tenant, capability=payload.capability
@@ -198,7 +262,7 @@ def dispatch(
         decision=decision,
         audit_id=audit_id,
         trace_id=payload.context.trace_id,
-        result=None,
+        result=executor_result,
         approval_id=approval_id,
         decision_path=decision_path,
         decision_reason=reason,
