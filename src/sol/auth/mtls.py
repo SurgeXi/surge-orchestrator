@@ -3,14 +3,20 @@
 Architecture (Phase 3.2):
   client (cert) -> nginx (mTLS verify, port 9321) -> SOL (HTTP, 127.0.0.1:9320)
 
-nginx sets two headers when client presents a valid cert chain:
+nginx sets these headers when client presents a valid cert chain:
   X-Client-Cert-Verified: SUCCESS | NONE | FAILED:<reason>
   X-Client-CN:            <subject CN from client cert>
+  X-SOL-Nginx-Token:      <shared secret proving nginx is the origin>
 
-SOL trusts these headers ONLY when the request arrives via the loopback path
-(127.0.0.1). Any external request bearing these headers without nginx in front
-must be rejected to prevent spoof — enforced by binding SOL to 127.0.0.1
-(see settings.host) and by an explicit check in the dependency.
+SOL trusts the cert-verified headers ONLY when X-SOL-Nginx-Token matches the
+shared secret on disk at settings.nginx_shared_secret_path. This stops a
+direct caller from spoofing the cert-verified headers by hitting SOL's HTTP
+port directly (which also binds 127.0.0.1, but could be reached via
+SSH-forwarded sockets, sidecar containers, etc).
+
+Loopback IP check is a secondary defense layer (settings.mtls_require_loopback),
+but the shared-secret token is the primary trust boundary because uvicorn's
+proxy_headers middleware rewrites the apparent peer IP from X-Forwarded-For.
 
 CN encoding contract:
   <caller-name>.sol-client          e.g. "brain.sol-client"
@@ -45,6 +51,30 @@ class MtlsPrincipal:
 
 
 @lru_cache(maxsize=1)
+def _load_nginx_shared_secret() -> str | None:
+    """Load the shared secret nginx must echo to prove origin.
+
+    Returns None if file is missing — in that case the secret check is
+    skipped (legacy behavior, falls back to loopback IP check only).
+
+    File at settings.nginx_shared_secret_path; must be mode 640 root:todds.
+    """
+    s = get_settings()
+    p = Path(s.nginx_shared_secret_path)
+    if not p.is_file():
+        return None
+    try:
+        secret = p.read_text().strip()
+        return secret if secret else None
+    except (PermissionError, OSError):
+        return None
+
+
+def reload_nginx_secret() -> None:
+    _load_nginx_shared_secret.cache_clear()
+
+
+@lru_cache(maxsize=1)
 def _load_callers() -> dict[str, dict]:
     """Load the mTLS callers registry from /etc/sol/mtls-callers.yaml.
 
@@ -75,6 +105,7 @@ def _load_callers() -> dict[str, dict]:
 def reload_callers() -> None:
     """Drop the cached callers registry — used by tests + admin reload."""
     _load_callers.cache_clear()
+    _load_nginx_shared_secret.cache_clear()
 
 
 def _parse_caller_from_cn(cn: str) -> str:
@@ -100,8 +131,21 @@ def extract_mtls_principal(request: Request) -> MtlsPrincipal | None:
         return None  # no mTLS — caller will try other auth paths
 
     s = get_settings()
-    # Trust headers only when the request hit us via loopback (nginx → SOL).
-    # External traffic bypassing nginx must be rejected.
+
+    # Primary trust boundary: nginx shared secret proves the request was
+    # actually terminated by our mTLS nginx, not a direct caller spoofing
+    # the cert headers via a sidecar HTTP socket on the same machine.
+    expected = _load_nginx_shared_secret()
+    if expected is not None:
+        seen = request.headers.get("X-SOL-Nginx-Token")
+        if seen != expected:
+            raise HTTPException(
+                401,
+                detail="mTLS headers present but nginx-token mismatch",
+            )
+
+    # Secondary defense: loopback IP check (off by default since uvicorn's
+    # proxy_headers middleware rewrites peer IP from X-Forwarded-For).
     if s.mtls_require_loopback:
         client_host = request.client.host if request.client else None
         if client_host not in ("127.0.0.1", "::1", "localhost"):

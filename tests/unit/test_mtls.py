@@ -110,6 +110,55 @@ def test_bad_cn_format_rejected(monkeypatch):
     assert ei.value.status_code == 401
 
 
+def test_nginx_shared_secret_required(tmp_path, monkeypatch):
+    """When nginx_shared_secret file exists, requests must echo it."""
+    callers = tmp_path / "callers.yaml"
+    callers.write_text(yaml.safe_dump({"callers": {"brain": {"allowed_tenants": ["*"]}}}))
+    secret_file = tmp_path / "nginx-secret"
+    secret_file.write_text("super-secret-token\n")
+    monkeypatch.setenv("SOL_MTLS_CALLERS_YAML_PATH", str(callers))
+    monkeypatch.setenv("SOL_NGINX_SHARED_SECRET_PATH", str(secret_file))
+    from sol import settings as _s
+    _s.get_settings.cache_clear()
+    reload_callers()
+
+    # Missing secret token => 401
+    req = _make_request(
+        {
+            "X-Client-Cert-Verified": "SUCCESS",
+            "X-Client-CN": "brain.sol-client",
+        }
+    )
+    with pytest.raises(HTTPException) as ei:
+        extract_mtls_principal(req)
+    assert ei.value.status_code == 401
+    assert "nginx-token mismatch" in ei.value.detail
+
+    # Wrong secret token => 401
+    req = _make_request(
+        {
+            "X-Client-Cert-Verified": "SUCCESS",
+            "X-Client-CN": "brain.sol-client",
+            "X-SOL-Nginx-Token": "wrong",
+        }
+    )
+    with pytest.raises(HTTPException) as ei:
+        extract_mtls_principal(req)
+    assert ei.value.status_code == 401
+
+    # Correct secret token => allowed
+    req = _make_request(
+        {
+            "X-Client-Cert-Verified": "SUCCESS",
+            "X-Client-CN": "brain.sol-client",
+            "X-SOL-Nginx-Token": "super-secret-token",
+        }
+    )
+    p = extract_mtls_principal(req)
+    assert p is not None
+    assert p.caller_name == "brain"
+
+
 def test_loopback_required_rejects_non_loopback(tmp_path, monkeypatch):
     callers = tmp_path / "callers.yaml"
     callers.write_text(yaml.safe_dump({"callers": {"brain": {"allowed_tenants": ["*"]}}}))

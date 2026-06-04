@@ -51,9 +51,15 @@ class Settings(BaseSettings):
     mtls_ca_path: str = "/etc/sol/ca/sol-ca.crt"
     mtls_port: int = 9321
     mtls_callers_yaml_path: str = "/etc/sol/mtls-callers.yaml"
-    # When True (default), SOL only honors mTLS headers from 127.0.0.1 — i.e.
-    # the nginx terminator. Set False only for unit tests using TestClient.
-    mtls_require_loopback: bool = True
+    # Shared secret nginx echoes in X-SOL-Nginx-Token to prove origin.
+    # If the file is missing, the secret check is skipped (legacy fallback).
+    # File MUST be mode 640 root:todds.
+    nginx_shared_secret_path: str = "/etc/sol/nginx-shared-secret"
+    # Loopback IP check is a secondary defense — disabled by default because
+    # uvicorn's proxy_headers middleware rewrites the apparent peer IP from
+    # X-Forwarded-For. Enable for hardened environments where you've also
+    # disabled proxy_headers in uvicorn.
+    mtls_require_loopback: bool = False
 
     # ---- token revocation cache ----
     revoked_token_cache_ttl_seconds: int = 300  # 5 min

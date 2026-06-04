@@ -13,6 +13,7 @@ def _dev_env(monkeypatch):
     monkeypatch.setenv("SOL_JWT_SIGNING_PUBKEY_PATH", "/nonexistent")
     monkeypatch.setenv("SOL_JWT_KEYS_DIR", "/nonexistent")
     monkeypatch.setenv("SOL_MTLS_CALLERS_YAML_PATH", "/nonexistent")
+    monkeypatch.setenv("SOL_NGINX_SHARED_SECRET_PATH", "/nonexistent")
     # Allow mTLS tests to bypass loopback requirement
     monkeypatch.setenv("SOL_MTLS_REQUIRE_LOOPBACK", "false")
     # clear cached settings + keystore + mtls callers + revocation between tests
