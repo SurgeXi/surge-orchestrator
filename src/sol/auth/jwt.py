@@ -65,8 +65,15 @@ class AdminJwtAuth:
         except jwt.PyJWTError as e:
             raise HTTPException(401, detail=f"invalid admin JWT header: {e}") from None
         kid = unverified_header.get("kid")
-        candidates = verify_key_for(kid)
+        # Try the kid'd key first (fast path), then fall back to every other
+        # known verify key — the kid is a hint, not a contract, because
+        # rotation reuses the "current" name across keys.
+        primary = verify_key_for(kid)
+        seen_kids = {k.kid for k in primary}
+        fallbacks = [k for k in verify_key_for(None) if k.kid not in seen_kids]
+        candidates = primary + fallbacks
         last_err: Exception | None = None
+        data = None
         for km in candidates:
             try:
                 data = jwt.decode(
@@ -76,7 +83,7 @@ class AdminJwtAuth:
             except jwt.PyJWTError as e:
                 last_err = e
                 continue
-        else:
+        if data is None:
             raise HTTPException(401, detail=f"invalid admin JWT: {last_err}") from None
 
         if data.get("kind") not in (None, "admin"):
