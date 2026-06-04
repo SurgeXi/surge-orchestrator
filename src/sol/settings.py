@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     jwt_admin_ttl_minutes: int = 60
     jwt_service_ttl_days: int = 90
     jwt_callback_ttl_minutes: int = 15
+    callback_hmac_key_path: str = "/etc/sol/keys/callback_hmac.key"
+    callback_base_url: str = "https://sol.surgexi.com"
+    smtp_host: str = "localhost"
+    smtp_port: int = 25
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = False
+    smtp_auth: bool = False
+    smtp_enabled: bool = False
+    smtp_from_address: str = "sol@surgexi.com"
+    smtp_from_name: str = "Surge Orchestration Layer"
+    smtp_timeout_seconds: int = 10
     jwt_signing_key_path: str = "/etc/sol/keys/jwt_signing.key"
     jwt_signing_pubkey_path: str = "/etc/sol/keys/jwt_signing.pub"
     # Rotation: SOL accepts JWTs signed by any *.pub in this dir; issues with current.

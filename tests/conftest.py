@@ -14,10 +14,13 @@ def _dev_env(monkeypatch):
     monkeypatch.setenv("SOL_JWT_KEYS_DIR", "/nonexistent")
     monkeypatch.setenv("SOL_MTLS_CALLERS_YAML_PATH", "/nonexistent")
     monkeypatch.setenv("SOL_NGINX_SHARED_SECRET_PATH", "/nonexistent")
+    monkeypatch.setenv("SOL_CALLBACK_HMAC_KEY_PATH", "/nonexistent")
+    monkeypatch.setenv("SOL_SMTP_ENABLED", "false")
     # Allow mTLS tests to bypass loopback requirement
     monkeypatch.setenv("SOL_MTLS_REQUIRE_LOOPBACK", "false")
     # clear cached settings + keystore + mtls callers + revocation between tests
     from sol import settings as _s
+    from sol.auth import callback_tokens as _cb
     from sol.auth import keystore as _ks
     from sol.auth import mtls as _mtls
     from sol.auth import revocation as _rev
@@ -25,8 +28,10 @@ def _dev_env(monkeypatch):
     _ks.reload_keys()
     _mtls.reload_callers()
     _rev.force_refresh()
+    _cb.reset_secret_cache()
     yield
     _s.get_settings.cache_clear()
     _ks.reload_keys()
     _mtls.reload_callers()
     _rev.force_refresh()
+    _cb.reset_secret_cache()

@@ -5,7 +5,7 @@ Run on surgecore after migrations:
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -136,7 +136,7 @@ SEED = [
 def seed() -> int:
     factory = get_session_factory()
     db = factory()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     n = 0
     try:
         for cap in SEED:
