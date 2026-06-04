@@ -33,12 +33,19 @@ def register_capability(
     caller: CallerContext = Depends(get_caller),
     db: Session = Depends(get_db),
 ) -> CapabilityRead:
-    # auth gate: service tokens with register_capability claim, or admin role.
-    # In Week 1, admin role is the path; service-token claims land Week 2.
-    if caller.principal_kind == "admin" and caller.sol_role != "admin":
-        from fastapi import HTTPException
+    # auth gate: service tokens with register_capability claim, OR admin role.
+    from fastapi import HTTPException
 
-        raise HTTPException(403, detail="admin role required")
+    if caller.principal_kind == "admin":
+        if caller.sol_role != "admin":
+            raise HTTPException(403, detail="admin role required")
+    elif caller.principal_kind == "service":
+        if "register_capability" not in (caller.claims or []):
+            raise HTTPException(
+                403, detail="service token missing register_capability claim"
+            )
+    else:
+        raise HTTPException(403, detail="forbidden")
 
     now = datetime.now(UTC)
     stmt = insert(Capability).values(
