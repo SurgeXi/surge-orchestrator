@@ -27,6 +27,7 @@ import hashlib
 import json
 import time
 import uuid
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -206,9 +207,9 @@ def dispatch(
             )
             outcome = str(br.get("outcome") or "error")
             summary = str(br.get("summary") or "")[:1024]
-            from datetime import datetime, timezone
+            from datetime import datetime
 
-            row.executed_at = datetime.now(tz=timezone.utc)
+            row.executed_at = datetime.now(tz=UTC)
             row.result_status = outcome
             row.result_summary = summary
             db.commit()

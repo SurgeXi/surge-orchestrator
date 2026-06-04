@@ -5,8 +5,6 @@ import json
 import sys
 import types
 
-import pytest
-
 from sol.executors import broker as broker_exec
 
 
@@ -20,7 +18,7 @@ def _install_fake_httpx(monkeypatch, *, status: int, body, raise_exc=None):
             self._body = body
 
         def json(self):
-            if isinstance(self._body, (dict, list)):
+            if isinstance(self._body, dict | list):
                 return self._body
             raise json.JSONDecodeError("nope", str(self._body), 0)
 
@@ -110,7 +108,6 @@ def test_executor_returns_error_on_transport_failure(tmp_path, monkeypatch):
 
     # We need the exception class to subclass the fake httpx.HTTPError, so
     # we install once then raise an instance of that captured class.
-    captured: dict = {}
 
     class FakeResp:
         status_code = 200
