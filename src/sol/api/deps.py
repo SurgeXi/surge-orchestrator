@@ -1,7 +1,7 @@
 """FastAPI dependencies for auth, tenant context, DB session."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import Depends, Header, HTTPException, Request, status
 
@@ -17,6 +17,7 @@ class CallerContext:
     allowed_tenants: list[str]
     sol_role: str | None = None
     shadow_mode: bool = False
+    claims: list[str] = field(default_factory=list)
 
 
 def get_caller(
@@ -44,6 +45,7 @@ def get_caller(
             tenant_id=tenant,
             allowed_tenants=principal.allowed_tenants,
             shadow_mode=shadow,
+            claims=principal.claims,
         )
 
     if authorization and authorization.lower().startswith("bearer "):
