@@ -1,12 +1,15 @@
-"""Service-token issuance + verification (90-day Ed25519 JWT per spec §4)."""
+"""Service-token issuance + verification (90-day Ed25519 JWT per spec §4).
+
+Backend: PyJWT with EdDSA via cryptography.
+"""
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+import jwt
 from fastapi import HTTPException
-from jose import JWTError, jwt
 
 from ..settings import get_settings
 
@@ -65,7 +68,7 @@ class ServiceTokenAuth:
         key, alg = _verifying()
         try:
             data = jwt.decode(token, key, algorithms=[alg], issuer="sol")
-        except JWTError as e:
+        except jwt.PyJWTError as e:
             raise HTTPException(401, detail=f"invalid service token: {e}") from None
         if data.get("kind") != "service":
             raise HTTPException(401, detail="not a service token")

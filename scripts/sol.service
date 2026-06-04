@@ -1,0 +1,37 @@
+[Unit]
+Description=Surge Orchestration Layer (SOL)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=todds
+Group=todds
+WorkingDirectory=/opt/sol
+EnvironmentFile=/etc/sol/db.env
+EnvironmentFile=-/etc/sol/service-tokens.env
+Environment=PYTHONPATH=/opt/sol/src
+Environment=SOL_PORT=9320
+Environment=SOL_HOST=127.0.0.1
+Environment=SOL_ENFORCE=false
+Environment=SOL_SHADOW_ENABLED=true
+Environment=SOL_ENVIRONMENT=production
+Environment=SOL_POLICY_YAML_PATH=/etc/sol/policy.yaml
+Environment=SOL_LOG_LEVEL=info
+ExecStart=/opt/sol/venv/bin/uvicorn sol.main:app --host 127.0.0.1 --port 9320 --workers 2
+Restart=on-failure
+RestartSec=2
+StandardOutput=append:/var/log/sol/sol.log
+StandardError=append:/var/log/sol/sol.log
+
+# Sandboxing
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/sol /var/lib/sol/wal
+PrivateTmp=true
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+
+[Install]
+WantedBy=multi-user.target
