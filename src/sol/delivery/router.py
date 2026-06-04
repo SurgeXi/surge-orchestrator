@@ -39,8 +39,8 @@ References:
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Optional
 
 from ..schemas.dispatch import DispatchRequest, Identity
 
@@ -85,7 +85,7 @@ class CapabilityHint:
     requires_human: bool = True
 
 
-def is_operator(logged_in_user: Optional[str]) -> bool:
+def is_operator(logged_in_user: str | None) -> bool:
     """True when the logged-in user is a known SurgeXi operator.
 
     Mirrors surge-brain ``sol_identity.SolIdentityContext.is_operator``.
@@ -103,7 +103,7 @@ def choose_channels(
     identity: Identity,
     *,
     actor_kind: str = "agent",
-    capability: Optional[CapabilityHint] = None,
+    capability: CapabilityHint | None = None,
 ) -> list[str]:
     """Return the ordered channel list per identity + actor + capability.
 
@@ -156,9 +156,9 @@ def choose_targets(
     identity: Identity,
     *,
     actor_kind: str = "agent",
-    capability: Optional[CapabilityHint] = None,
-    pulsepoint_session_id: Optional[str] = None,
-    operator_email: Optional[str] = None,
+    capability: CapabilityHint | None = None,
+    pulsepoint_session_id: str | None = None,
+    operator_email: str | None = None,
 ) -> list[ChannelChoice]:
     """Return (channel, target) pairs for the approval-creation service.
 
