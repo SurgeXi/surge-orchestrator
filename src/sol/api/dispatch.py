@@ -94,12 +94,26 @@ _READONLY_BINARIES = frozenset({
     "find", "ls", "stat", "du", "df", "cat", "head", "tail", "wc", "grep",
     "egrep", "fgrep", "zgrep", "sort", "uniq", "cut", "file", "sha256sum",
     "md5sum", "echo", "printf", "tr", "nl", "basename", "dirname", "realpath",
-    "readlink", "pwd", "date", "hostname", "whoami", "uname", "free", "uptime",
+    "readlink", "pwd", "whoami", "uname", "free", "uptime",
     "column", "comm", "tac", "rev", "jq", "tree", "id",
 })
+# NOTE: `date` and `hostname` are intentionally NOT allow-listed. Both have
+# state-changing invocations (`date -s/--set` sets the clock; `hostname NAME`
+# / `hostname -b` sets the hostname). Their read value is covered by
+# uname/uptime/free, so we fail CLOSED rather than try to distinguish their
+# read vs write forms.
 _READONLY_FORBIDDEN_FLAGS = frozenset({
     "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls",
 })
+# Per-binary write/state-change flags. Each entry: (short_letters, long_flags).
+#   short_letters: single chars that, if present in ANY combined short-flag
+#     bundle (a token like `-rno` or `-o/tmp/x`), mean a write -> reject.
+#   long_flags: `--name` forms; reject if token == it or starts with `--name=`.
+# This catches glued (`-o/tmp/x`), `--output=FILE`, separated (`-o /tmp/x`),
+# combined (`-rno FILE`), quoted, pipeline-stage, and abs-path forms alike.
+_BINARY_WRITE_FLAGS = {
+    "sort": (frozenset({"o"}), ("--output",)),
+}
 
 
 def classify_readonly(payload_args: dict) -> bool:
@@ -119,11 +133,28 @@ def classify_readonly(payload_args: dict) -> bool:
                 toks = shlex.split(segment)
             except ValueError:
                 return False
-            if not toks or toks[0].rsplit("/", 1)[-1] not in _READONLY_BINARIES:
+            if not toks:
                 return False
+            binary = toks[0].rsplit("/", 1)[-1]
+            if binary not in _READONLY_BINARIES:
+                return False
+            short_writes, long_writes = _BINARY_WRITE_FLAGS.get(
+                binary, (frozenset(), ())
+            )
             for t in toks:
                 if t in _READONLY_FORBIDDEN_FLAGS or t.startswith("-exec"):
                     return False
+                # Per-binary write-flag denylist (e.g. `sort -o FILE`).
+                if t.startswith("--"):
+                    head = t.split("=", 1)[0]
+                    if head in long_writes:
+                        return False
+                elif t.startswith("-") and len(t) > 1 and short_writes:
+                    # Combined short-flag bundle: reject if any write letter
+                    # appears before its (possibly glued) argument. Scan the
+                    # cluster up to the first non-flag char of a value.
+                    if any(ch in short_writes for ch in t[1:]):
+                        return False
         return True
     except Exception:
         return False
