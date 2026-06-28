@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # This is a SEPARATE flag from auto_readonly: it gates a tiny
     # allow-list of pre-vetted SAFE-WRITE remediations, not read-only ops.
     auto_remediation: bool = False
+    # Auto-approve provably read-only run_bash (allow-listed binaries,
+    # fail-closed). Writes/deletes/network/service-control/deploys stay gated.
+    auto_readonly: bool = False
 
     # ---- database ----
     database_url: str = Field(

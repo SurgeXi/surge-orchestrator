@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import shlex
 import time
 import uuid
 from datetime import UTC, datetime
@@ -83,6 +84,51 @@ def _needs_human(cap: Capability | None, args: dict) -> bool:
     return risk in _HUMAN_RISK_BANDS
 
 
+# ---- Auto-readonly lane: Surge autonomy for provably read-only host ops ----
+# A run_bash whose command is a single pipeline of allow-listed read-only
+# binaries with NO redirect / substitution / backgrounding / chaining /
+# network / find-write-action. Allow-list, not deny-list; fail CLOSED on any
+# ambiguity. awk/sed/xargs/env are EXCLUDED (can write or exec without a
+# shell redirect). The systemd sandbox remains the hard floor underneath.
+_READONLY_BINARIES = frozenset({
+    "find", "ls", "stat", "du", "df", "cat", "head", "tail", "wc", "grep",
+    "egrep", "fgrep", "zgrep", "sort", "uniq", "cut", "file", "sha256sum",
+    "md5sum", "echo", "printf", "tr", "nl", "basename", "dirname", "realpath",
+    "readlink", "pwd", "date", "hostname", "whoami", "uname", "free", "uptime",
+    "column", "comm", "tac", "rev", "jq", "tree", "id",
+})
+_READONLY_FORBIDDEN_FLAGS = frozenset({
+    "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls",
+})
+
+
+def classify_readonly(payload_args: dict) -> bool:
+    """True only for a run_bash whose command is provably read-only: a pipeline
+    of allow-listed read-only binaries with no redirect, command substitution,
+    backgrounding, chaining, or find/-exec-style write action. Fail CLOSED."""
+    try:
+        if str(payload_args.get("tool", "")) != "run_bash":
+            return False
+        cmd = (payload_args.get("args", {}) or {}).get("cmd", "")
+        if not isinstance(cmd, str) or not cmd.strip():
+            return False
+        if any(t in cmd for t in (">", "<", "`", "$(", "${", "&", ";", "\n", "\r")):
+            return False
+        for segment in cmd.split("|"):
+            try:
+                toks = shlex.split(segment)
+            except ValueError:
+                return False
+            if not toks or toks[0].rsplit("/", 1)[-1] not in _READONLY_BINARIES:
+                return False
+            for t in toks:
+                if t in _READONLY_FORBIDDEN_FLAGS or t.startswith("-exec"):
+                    return False
+        return True
+    except Exception:
+        return False
+
+
 @router.post("/dispatch", response_model=DispatchResponse, status_code=200)
 def dispatch(
     request: Request,
@@ -124,6 +170,12 @@ def dispatch(
         remediation_name = classify_remediation(payload.args)
         if remediation_name is not None:
             needs_human = False
+    # Auto-readonly lane: a provably read-only run_bash that would otherwise be
+    # human-gated is auto-approved. Mutating/remote/deploy work stays gated.
+    auto_readonly = False
+    if needs_human and s.auto_readonly and classify_readonly(payload.args):
+        needs_human = False
+        auto_readonly = True
 
     # ---------- cross-rule evaluation (Phase 3.4) ----------
     # Cross-rules run BEFORE approval / executor for non-shadow paths.
@@ -166,9 +218,14 @@ def dispatch(
             decision_path = "auto-remediation"
             reason = f"remediation:{remediation_name}"
         else:
-            decision = "approved"
-            decision_path = "auto-policy"
-            reason = "auto_under_threshold"
+            if auto_readonly:
+                decision = "approved"
+                decision_path = "auto-readonly"
+                reason = "readonly_allowlisted"
+            else:
+                decision = "approved"
+                decision_path = "auto-policy"
+                reason = "auto_under_threshold"
 
     row = Dispatch(
         audit_id=audit_id,
