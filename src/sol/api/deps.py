@@ -27,6 +27,7 @@ class CallerContext:
     allowed_tenants: list[str]
     sol_role: str | None = None
     shadow_mode: bool = False
+    explicit_enforce: bool = False
     claims: list[str] = field(default_factory=list)
     auth_method: str = "unknown"  # mtls | jwt-service | jwt-admin
     jti: str | None = None  # JWT id when applicable (for audit + revoke)
@@ -39,7 +40,9 @@ def get_caller(
     x_surgexi_tenant: str | None = Header(default=None, alias="X-SurgeXi-Tenant"),
     x_sol_mode: str | None = Header(default=None, alias="X-SOL-Mode"),
 ) -> CallerContext:
-    shadow = (x_sol_mode or "").strip().lower() == "shadow"
+    mode_norm = (x_sol_mode or "").strip().lower()
+    shadow = mode_norm == "shadow"
+    explicit_enforce = mode_norm == "enforce"
 
     # ---- 1. mTLS path (nginx headers) ----
     mtls_p = extract_mtls_principal(request)
@@ -62,6 +65,7 @@ def get_caller(
             tenant_id=tenant,
             allowed_tenants=mtls_p.allowed_tenants,
             shadow_mode=shadow,
+            explicit_enforce=explicit_enforce,
             claims=mtls_p.claims,
             auth_method="mtls",
         )
@@ -87,6 +91,7 @@ def get_caller(
             tenant_id=tenant,
             allowed_tenants=principal.allowed_tenants,
             shadow_mode=shadow,
+            explicit_enforce=explicit_enforce,
             claims=principal.claims,
             auth_method="jwt-service",
             jti=principal.jti,
@@ -103,6 +108,7 @@ def get_caller(
             allowed_tenants=admin.allowed_tenants or ["*"],
             sol_role=admin.sol_role,
             shadow_mode=shadow,
+            explicit_enforce=explicit_enforce,
             auth_method="jwt-admin",
             jti=admin.jti,
         )
