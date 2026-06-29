@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     # ---- enforcement ----
     enforce: bool = False
     shadow_enabled: bool = True
+    # Auto-remediation lane (DEFAULT OFF). When true, a dispatch that
+    # EXACTLY matches a curated remediation playbook (see
+    # sol.policy.remediation) may be auto-approved instead of human-gated.
+    # Off => Surge may only RECOMMEND; it never applies a remediation.
+    # This is a SEPARATE flag from auto_readonly: it gates a tiny
+    # allow-list of pre-vetted SAFE-WRITE remediations, not read-only ops.
+    auto_remediation: bool = False
 
     # ---- database ----
     database_url: str = Field(
