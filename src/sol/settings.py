@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # ---- enforcement ----
     enforce: bool = False
     shadow_enabled: bool = True
+    # Auto-approve provably read-only run_bash (allow-listed binaries,
+    # fail-closed). Writes/deletes/network/service-control/deploys stay gated.
+    auto_readonly: bool = False
 
     # ---- database ----
     database_url: str = Field(

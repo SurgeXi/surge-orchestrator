@@ -12,9 +12,6 @@ class HotPolicy:
     version: int
     rules: list[dict]
     expiry_defaults: dict[str, int] = field(default_factory=dict)
-    # Cross-rule config (Phase 3.4 — repo_cooldown, etc.).
-    # Shape: {"repo_cooldown": {"capabilities": [...], "window_seconds": int, ...}, ...}
-    cross_rules: dict[str, dict] = field(default_factory=dict)
 
 
 class PolicyCache:
@@ -33,22 +30,13 @@ class PolicyCache:
         p = Path(path)
         if not p.exists():
             # Phase 3.1 — file may not exist on first deploy; load empty default.
-            self._policy = HotPolicy(
-                version=0,
-                rules=[],
-                expiry_defaults=_DEFAULT_EXPIRY,
-                cross_rules={},
-            )
+            self._policy = HotPolicy(version=0, rules=[], expiry_defaults=_DEFAULT_EXPIRY)
             return
         data = yaml.safe_load(p.read_text()) or {}
-        cross = data.get("cross_rules") or {}
-        if not isinstance(cross, dict):
-            cross = {}
         self._policy = HotPolicy(
             version=int(data.get("version", 0)),
             rules=list(data.get("rules", [])),
             expiry_defaults={**_DEFAULT_EXPIRY, **(data.get("expiry_defaults") or {})},
-            cross_rules=cross,
         )
 
     def expiry_for(self, capability: str, category: str | None = None) -> int:
