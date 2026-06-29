@@ -30,6 +30,31 @@ router = APIRouter()
 log = get_logger(__name__)
 
 
+def _expire_stale(db: Session) -> int:
+    """Mark every pending approval whose TTL has elapsed as 'expired'. Expire
+    by AGE only (expires_at < now) — never touches fresh pending rows and never
+    deletes. Returns the number transitioned. Cheap: bounded by the
+    (status, expires_at) index. Safe to call on every pending-list request and
+    from a periodic sweep."""
+    now = datetime.now(UTC)
+    rows = (
+        db.query(Approval)
+        .filter(Approval.status == "pending", Approval.expires_at < now)
+        .all()
+    )
+    n = 0
+    for r in rows:
+        r.status = "expired"
+        r.decided_at = now
+        r.decided_by = "ttl-sweep"
+        r.decision_reason = "ttl_expired"
+        n += 1
+    if n:
+        db.commit()
+        log.info("sol.approval.expired_sweep", expired=n)
+    return n
+
+
 @router.get("/approvals/pending", response_model=list[ApprovalRead])
 def list_pending(
     tenant_id: str | None = None,
@@ -38,6 +63,7 @@ def list_pending(
     db: Session = Depends(get_db),
     _=Depends(require_approver),
 ) -> list[ApprovalRead]:
+    _expire_stale(db)
     q = db.query(Approval).filter(Approval.status == "pending")
     if tenant_id:
         q = q.filter(Approval.tenant_id == tenant_id)
@@ -57,6 +83,14 @@ def decide(
     row = db.get(Approval, approval_id)
     if row is None:
         raise HTTPException(404, detail="approval not found")
+    if row.status == "pending" and row.expires_at < datetime.now(UTC):
+        # Stale pending: expire-on-read so a long-dead approval can't be
+        # actioned. Persist the transition before refusing.
+        row.status = "expired"
+        row.decided_at = datetime.now(UTC)
+        row.decided_by = "ttl-sweep"
+        row.decision_reason = "ttl_expired"
+        db.commit()
     if row.status != "pending":
         raise HTTPException(409, detail=f"approval already {row.status}")
     row.status = payload.decision
@@ -101,6 +135,12 @@ def decide_by_callback(
     row = db.get(Approval, approval_id)
     if row is None:
         raise HTTPException(404, detail="approval not found")
+    if row.status == "pending" and row.expires_at < datetime.now(UTC):
+        row.status = "expired"
+        row.decided_at = datetime.now(UTC)
+        row.decided_by = "ttl-sweep"
+        row.decision_reason = "ttl_expired"
+        db.commit()
     if row.status != "pending":
         # Idempotent re-click: return current state so a second click of
         # the same email link doesn't 500 the operator's browser.
