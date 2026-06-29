@@ -49,6 +49,7 @@ from ..models import Capability, Dispatch
 from ..observability.logging import get_logger
 from ..observability.metrics import dispatch_latency_seconds, dispatches_total
 from ..policy.cross_rules import evaluate_repo_cooldown
+from ..policy.remediation import classify_remediation
 from ..schemas.dispatch import DispatchRequest, DispatchResponse, DispatchResult
 from ..services.approvals import create_and_deliver, poll_for_decision
 from ..settings import get_settings
@@ -111,6 +112,18 @@ def dispatch(
     cap = db.get(Capability, payload.capability)
     needs_human = _needs_human(cap, payload.args)
 
+    # ---------- auto-remediation lane (DEFAULT OFF) ----------
+    # A dispatch that EXACTLY matches a curated, pre-vetted remediation
+    # playbook (bounded + reversible + idempotent) may be auto-approved
+    # instead of human-gated -- ONLY when SOL_AUTO_REMEDIATION is on.
+    # Allow-list, fail-closed: anything not matched stays human-gated.
+    # The cross-rule check below still applies; a cross-rule denial wins.
+    remediation_name: str | None = None
+    if needs_human and s.auto_remediation:
+        remediation_name = classify_remediation(payload.args)
+        if remediation_name is not None:
+            needs_human = False
+
     # ---------- cross-rule evaluation (Phase 3.4) ----------
     # Cross-rules run BEFORE approval / executor for non-shadow paths.
     # A denial here short-circuits — no approval row, no executor call.
@@ -147,6 +160,10 @@ def dispatch(
             decision = "queued"
             decision_path = "human-approval"
             reason = "requires_human"
+        elif remediation_name is not None:
+            decision = "approved"
+            decision_path = "auto-remediation"
+            reason = f"remediation:{remediation_name}"
         else:
             decision = "approved"
             decision_path = "auto-policy"
