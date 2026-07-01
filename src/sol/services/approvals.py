@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Approval lifecycle service.
 
 Creates approval rows from a dispatch, fans out delivery, and polls for

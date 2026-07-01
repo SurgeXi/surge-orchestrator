@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Seed sol.capabilities with the Week-1 baseline set.
 
 Run on surgecore after migrations:

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Per-JWT revocation, backed by sol.revoked_tokens with 5-min in-memory cache.
 
 Cache is intentionally tiny + simple: a dict mapping jti -> True with a single

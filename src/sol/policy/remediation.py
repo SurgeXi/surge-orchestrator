@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Curated autonomous-remediation registry for Surge (DEFAULT-OFF, fail-closed).
 
 Design (approved 2026-06-29, see PROPOSAL-autonomous-remediation-playbook.md):

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 # Verify the sol schema is fully migrated.
 # Lists all sol.* tables + their indexes. Exits 0 only if all 5 expected tables exist.
 

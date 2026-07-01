@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """JWT signing key store with rotation support.
 
 Layout of jwt_keys_dir (default /etc/sol/keys):

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Unit tests for the signed one-tap callback token signer."""
 from __future__ import annotations
 

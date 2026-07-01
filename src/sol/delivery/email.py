@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """SMTP email delivery channel.
 
 Phase 3.2 Week 2 — primary approval-delivery channel. Sends a MIME

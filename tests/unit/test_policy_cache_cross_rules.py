@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """PolicyCache must load cross_rules from /etc/sol/policy.yaml (Phase 3.4)."""
 from __future__ import annotations
 

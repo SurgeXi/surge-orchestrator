@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """GET /v1/sol/audit — audit ledger query."""
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved. -->
 # SOL shadow hooks — calling-agent integration
 
 Every fleet agent that emits a side-effect calls SOL's `POST /v1/sol/dispatch` with `X-SOL-Mode: shadow`. SOL writes an audit row and returns `decision=shadow`. The agent's legacy path runs unchanged. Failure to reach SOL is logged but does NOT block.

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """policy.yaml loader (kept separate from the cache for testability)."""
 from __future__ import annotations
 

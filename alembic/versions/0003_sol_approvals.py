@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.approvals + FK from dispatches.approval_id
 
 Revision ID: 0003_sol_approvals

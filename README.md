@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved. -->
 # surge-orchestrator (SOL)
 
 > A single, auditable control plane for every side-effect an AI agent fleet takes — one place to authorize, log, gate, and dispatch actions.
@@ -117,5 +118,6 @@ their own tightly time-boxed tokens — a leaked approval link expires in minute
 - [ ] Pluggable approval-delivery channels (chat, mobile push, email)
 
 ## License
+© 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
+Source-available for evaluation only — see LICENSE.
 
-MIT — © 2026 Todd Smith. See [LICENSE](LICENSE).

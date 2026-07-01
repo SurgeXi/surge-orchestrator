@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """POST /v1/sol/capabilities/register and GET /v1/sol/capabilities."""
 from __future__ import annotations
 

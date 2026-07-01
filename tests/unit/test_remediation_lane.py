@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Lane-decision tests: prove the auto-remediation FLIP only happens when the
 flag is ON *and* the request matches a curated playbook. Mirrors the exact
 condition in sol.api.dispatch (``needs_human and s.auto_remediation and

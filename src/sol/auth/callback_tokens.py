@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Signed one-tap callback URLs for email/chat delivery channels.
 
 Phase 3.2 (Week 2) — email and chat-bubble delivery embed a per-decision

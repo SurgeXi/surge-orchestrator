@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.capabilities row tweak: broker_capability defers risk to args.risk
 
 Phase 3.3 Week 3 — when Brain routes capability calls through SOL via

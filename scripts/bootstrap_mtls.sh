@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 # Bootstrap SOL mTLS CA + server cert + client certs.
 #
 # Idempotent: existing files are NOT overwritten. If you need to regenerate,

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """JWT issue + verify for human admins (60 min TTL per spec §10 #1).
 
 Key model: see auth/keystore.py — supports rotation (current + prev-1/prev-2).

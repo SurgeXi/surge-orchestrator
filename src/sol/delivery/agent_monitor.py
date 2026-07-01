@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Agent-monitor (operator console) delivery (Phase 3 follow-up)."""
 from __future__ import annotations
 

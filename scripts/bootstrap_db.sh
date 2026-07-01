@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 # Bootstrap the SOL database role + schema on the Brain Postgres.
 #
 # Idempotent. Run as root on surgecore once at provisioning. Generates a

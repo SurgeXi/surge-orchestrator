@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Smoke: drive a synthetic approval all the way through SOL.
 
   1. POST /v1/sol/dispatch with X-SOL-Mode: enforce, capability=permission_gate_op

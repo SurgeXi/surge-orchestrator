@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Broker executor — forwards to Maestro Broker :8220 (Phase 3.3 Week 3).
 
 Wires SOL's dispatch path to Broker's existing

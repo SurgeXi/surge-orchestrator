@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 from .approval import Approval
 from .capability import Capability
 from .dispatch import Dispatch

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Vertical agent executor — forwards to AIAP/PB agents (lands Week 5)."""
 from __future__ import annotations
 

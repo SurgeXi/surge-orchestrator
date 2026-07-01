@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved. -->
 # SOL Token Rotation Runbook
 
 This runbook covers the two ongoing token-hygiene operations SOL operators

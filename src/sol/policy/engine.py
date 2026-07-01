@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Policy evaluator (skeleton — full eval lands Week 2)."""
 from __future__ import annotations
 

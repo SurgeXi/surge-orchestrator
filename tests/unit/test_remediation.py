@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Unit tests for the curated auto-remediation registry (sol.policy.remediation).
 
 Two themes, per the Job-2 safety contract:

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.issued_tokens + sol.revoked_tokens — token audit + revocation."""
 from __future__ import annotations
 

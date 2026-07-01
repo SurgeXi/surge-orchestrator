@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Surge Runner executor — forwards approved dispatches to surge-runner.
 
 Phase 3.4 Week 4 — per SOL spec §5.

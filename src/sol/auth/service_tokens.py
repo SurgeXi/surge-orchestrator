@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Service-token issuance + verification (90-day EdDSA JWT per spec §4).
 
 Same key model as admin JWT (auth/keystore.py — supports rotation).
