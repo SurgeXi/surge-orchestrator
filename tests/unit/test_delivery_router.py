@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Identity-aware approval-delivery router tests — task #107.
 
 Locks the rule from [[pulsepoint-design-decisions]] §5 in code:

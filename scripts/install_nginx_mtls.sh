@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 # Install or re-install the SOL mTLS nginx site.
 #
 # Idempotent:

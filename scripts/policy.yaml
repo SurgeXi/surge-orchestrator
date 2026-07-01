@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 # Initial SOL policy file. Source of truth lives in /etc/sol/policy.yaml on the host.
 # Week 1 ships expiry defaults + an empty rules block. Cross-rules land Week 2-4.
 version: 1

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """FastAPI dependencies for auth, tenant context, DB session.
 
 Three auth paths, in priority order:

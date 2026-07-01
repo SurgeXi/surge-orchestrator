@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Email delivery rendering + safety net tests.
 
 Doesn't touch a real SMTP server. Verifies:

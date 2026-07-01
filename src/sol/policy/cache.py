@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """In-memory hot policy cache (refreshed from YAML + DB)."""
 from __future__ import annotations
 

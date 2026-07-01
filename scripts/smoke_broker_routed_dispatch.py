@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Phase 3.3 Week 3 smoke — drive a real broker capability via SOL.
 
 End-to-end:

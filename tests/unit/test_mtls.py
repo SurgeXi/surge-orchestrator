@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Tests for the mTLS auth path (header-based, after nginx termination)."""
 from __future__ import annotations
 

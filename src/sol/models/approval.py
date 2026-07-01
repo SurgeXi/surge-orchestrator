@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.approvals — approval queue (absorbs Brain's pending_actions in Phase 3.2)."""
 from __future__ import annotations
 

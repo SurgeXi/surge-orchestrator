@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Issue admin/service tokens. Writes to a 600 file; does NOT print secrets.
 
 Persists issuance metadata to sol.issued_tokens when reachable (so revoke

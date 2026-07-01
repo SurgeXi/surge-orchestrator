@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.learned_tiers — Phase 5 learning-system schema (lands now)."""
 from __future__ import annotations
 

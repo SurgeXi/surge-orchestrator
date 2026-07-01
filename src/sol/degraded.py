@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Local append-only WAL queue (Postgres-down fallback). Full impl Week 6."""
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 # Apply Alembic migrations against the SOL schema.
 #
 # Pre-conditions:

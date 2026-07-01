@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """POST /v1/sol/dispatch — single entry point for every side-effect.
 
 Phase 3.2 Week 2 modes:

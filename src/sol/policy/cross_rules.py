@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Cross-rule policy evaluators — Phase 3.4.
 
 Cross-rules are constraints that span MULTIPLE dispatches and therefore

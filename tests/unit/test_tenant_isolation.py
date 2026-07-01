@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Verify the tenant-isolation check in the get_caller dep + dispatch path."""
 from __future__ import annotations
 

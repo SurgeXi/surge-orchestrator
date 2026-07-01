@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.capabilities — registry of every dispatchable side-effect."""
 from __future__ import annotations
 

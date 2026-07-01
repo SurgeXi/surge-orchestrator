@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved. -->
 # SOL deploy notes — surgecore
 
 Production node: **surgecore-dell** (Tailscale name `surgecore`). Port **9320** (the spec name was 9300, but that port is held by `surgexi-command-center`; the deviation is recorded in `README.md`).

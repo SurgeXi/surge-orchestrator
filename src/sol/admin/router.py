@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Bootstrap admin UI router. Server-rendered FastAPI + Jinja2.
 
 Phase 3.1 ships a minimal version: shows pending approvals + capability list.

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Alembic env — autogenerate against sol.* models."""
 from __future__ import annotations
 

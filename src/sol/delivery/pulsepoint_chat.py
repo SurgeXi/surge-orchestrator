@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """PulsePoint chat delivery (full implementation Phase 3 per spec §10 #6)."""
 from __future__ import annotations
 

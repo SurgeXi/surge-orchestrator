@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """sol.issued_tokens + sol.revoked_tokens + dispatches.auth_method
 
 Phase 3.2 — mTLS + token rotation infrastructure.

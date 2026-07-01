@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Identity-aware approval-delivery router.
 
 Single source of truth for the rule defined in

@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """GEOpro card delivery (full implementation lands Week 6 cutover)."""
 from __future__ import annotations
 

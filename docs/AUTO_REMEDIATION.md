@@ -1,3 +1,4 @@
+<!-- Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved. -->
 # SOL Auto-Remediation Lane (DEFAULT-OFF)
 
 Surge autonomously resolves a **tiny, hand-curated** set of light, deterministic,

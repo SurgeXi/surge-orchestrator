@@ -1,3 +1,4 @@
+# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """Integration test for the shadow-only dispatch path.
 
 Skipped unless SOL_TEST_DATABASE_URL is set (a writable Postgres reachable
