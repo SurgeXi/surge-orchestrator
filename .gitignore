@@ -17,3 +17,7 @@ venv/
 !.env.example
 *.swp
 .DS_Store
+*.key
+*.pem
+/data
+/models

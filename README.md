@@ -1,68 +1,121 @@
 # surge-orchestrator (SOL)
 
-The **Surge Orchestration Layer** — single auditable surface for every side-effect across the SurgeXi fleet.
+> A single, auditable control plane for every side-effect an AI agent fleet takes — one place to authorize, log, gate, and dispatch actions.
 
-Refines [[option-3-unified-surge-design]] and implements the spec in `memory/project_sol_buildable_spec.md` (locked 2026-06-03).
+<!-- Badges: update the CI badge path if the workflow file is renamed. -->
+[![ci](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/test.yml/badge.svg)](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/test.yml)
+[![lint](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/lint.yml/badge.svg)](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/lint.yml)
+[![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.12-blue.svg)](pyproject.toml)
 
-## Status
+The **Surge Orchestration Layer (SOL)** is a FastAPI service that converges three
+things most agent stacks scatter across the codebase — **policy evaluation**,
+**audit logging**, and **action dispatch** — behind one narrow interface. When an
+autonomous agent wants to do something with a consequence (call a tool, send a
+message, write to a system of record), it asks SOL. SOL records the request,
+evaluates it against policy, optionally routes it for human approval, and only
+then forwards it to the downstream executor. The result: a single query answers
+"what did the fleet do, why was it allowed, and who approved it."
 
-**Phase 3.1 — shadow mode only.** SOL writes audit rows for every dispatch it receives from Brain / Broker / Surge Runner but does NOT execute and does NOT block. Legacy side-effect channels remain primary. `SOL_ENFORCE=false`.
+## Architecture
 
-## Layout
-
+```mermaid
+flowchart TD
+    AG[Agents / callers] -->|dispatch request| API[SOL API<br/>FastAPI]
+    API --> AUTH[Auth<br/>JWT + service tokens]
+    AUTH --> POL[Policy evaluator<br/>hot-cached rules]
+    POL -->|allow| EXhome[Executor / forwarder]
+    POL -->|needs approval| APR[Approval delivery<br/>human-in-the-loop]
+    APR -->|approved| EXhome
+    POL -->|deny| REJ[Reject + audit]
+    API --> AUD[(Audit store<br/>Postgres)]
+    EXhome --> AUD
+    API -.->|DB unavailable| WAL[Degraded-mode<br/>local WAL queue]
+    WAL -.->|replay on recovery| AUD
 ```
-src/sol/
-  main.py              FastAPI app factory + uvicorn entrypoint
-  settings.py          env-driven config
-  db.py                SQLAlchemy session + engine
-  models/              ORM
-  schemas/             pydantic request/response
-  api/                 endpoints (dispatch, capabilities, approvals, audit, policies, health)
-  policy/              evaluator + hot cache + YAML loader
-  auth/                JWT + service tokens + mTLS
-  delivery/            approval delivery channels
-  executors/           downstream forwarders
-  degraded.py          local WAL queue when Postgres is unavailable
-  observability/       metrics + structured logging
-  admin/               FastAPI + Jinja2 admin UI
 
-alembic/               migrations (DDL per spec §2)
-tests/                 unit / integration / migration / stress / chaos
-.github/workflows/     test, lint, docker-build
-```
+## Features
 
-## Run locally (dev)
+- **Unified dispatch surface** — every side-effect enters through one API instead of N ad-hoc channels.
+- **Policy-as-data** — rules are evaluated by a hot-cached evaluator loaded from YAML; change policy without shipping code.
+- **Human-in-the-loop gates** — high-impact actions pause for explicit approval with time-boxed one-tap approve/deny tokens.
+- **Complete audit trail** — every request, decision, and outcome is persisted; the audit row is written whether the action is allowed, denied, or deferred.
+- **Shadow mode** — SOL can observe and record without enforcing, so it can be introduced to a live system safely before it takes the wheel.
+- **Degraded-mode durability** — if the database is unavailable, dispatches are queued to a local write-ahead log and replayed on recovery; the fleet keeps moving.
+- **Layered auth** — short-lived JWTs for human admins, signed service tokens for agents, with a transport-security (mTLS) hardening path.
+- **Observability built in** — Prometheus metrics and structured logging on every path.
+
+## Quick start
 
 ```bash
+git clone https://github.com/SurgeXi/surge-orchestrator.git
+cd surge-orchestrator
+
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install -e .[dev]
-export SOL_DATABASE_URL=postgresql+psycopg2://sol_user:...@127.0.0.1:5432/surge_brain
+
+# Point at a Postgres database and apply migrations
+export SOL_DATABASE_URL="postgresql+psycopg2://sol:sol@localhost:5432/sol"
+alembic upgrade head
+
+# Run in shadow mode: observe + audit, do not enforce
 export SOL_ENFORCE=false
 export SOL_SHADOW_ENABLED=true
-alembic upgrade head
 uvicorn sol.main:app --host 127.0.0.1 --port 9320 --reload
 ```
 
-## Deploy
+Run the test suite:
 
-See `docs/DEPLOY.md` for the surgecore deploy procedure (systemd unit + nginx + venv layout).
+```bash
+pytest -q tests/unit
+```
 
-## Port
+## Configuration
 
-Production: **9320** (the spec named 9300, but it is occupied by `surgexi-command-center` on surgecore).
+SOL is configured entirely through environment variables (see `.env.example`):
 
-## Security
+| Variable | Purpose |
+|----------|---------|
+| `SOL_DATABASE_URL` | Postgres connection string for the audit store |
+| `SOL_ENFORCE` | `true` = block disallowed actions; `false` = observe only |
+| `SOL_SHADOW_ENABLED` | Record dispatches without executing them |
+| `SOL_ENVIRONMENT` | `dev` / `staging` / `prod` selectors for logging + policy |
 
-- Service tokens: JWT Ed25519, 90-day expiry, refreshed 14 days before expiration.
-- Human admins: JWT, 60-minute TTL.
-- Callback tokens (one-tap approve/deny): 15-minute TTL.
-- mTLS (Phase 3): service-to-service transport, in scope for Week 1 hardening.
-- DB user: `sol_user` has read+write on `sol` schema only — no access to other Brain tables.
+Policy rules live in a YAML file loaded at startup and hot-reloaded into the
+evaluator's cache; each rule maps a capability + context to an outcome
+(`allow`, `deny`, or `require_approval`).
 
-## Rollback
+## Design notes
 
-Set `SOL_SHADOW_ENABLED=false` in each calling agent's EnvironmentFile and restart that agent. Shadow hooks become no-ops. SOL service can keep running.
+The central bet is a **narrow waist**. Agent platforms tend to grow several
+parallel side-effect channels — a tool broker here, a permission check there, a
+task runner somewhere else — and auditability erodes because no single component
+sees everything. SOL deliberately funnels every consequential action through one
+interface so that *policy, audit, and dispatch share one truth*.
 
-## Spec
+Two decisions make that safe to adopt in a live system:
 
-The full architecture + 7-week migration plan lives in `memory/project_sol_buildable_spec.md`. Do not redefine it here.
+1. **Shadow-first rollout.** SOL can be wired in as a pure observer
+   (`SOL_ENFORCE=false`). It writes the same audit rows it would in enforcing
+   mode, so you can validate its decisions against reality before letting it
+   block anything. The legacy channels stay primary until you're confident.
+2. **Fail-open durability, not fail-silent.** A centralized control plane is a
+   potential single point of failure. SOL answers that with a degraded mode:
+   if Postgres is unavailable, dispatches are written to a local WAL and
+   replayed on recovery, so a database blip never silently drops the audit
+   trail or stalls the fleet.
+
+Auth is deliberately layered by principal: agents authenticate with signed
+service tokens, humans with short-lived JWTs, and one-tap approval links carry
+their own tightly time-boxed tokens — a leaked approval link expires in minutes.
+
+## Roadmap
+
+- [ ] Enforcing mode on by default after the shadow-validation window
+- [ ] mTLS for all service-to-service transport
+- [ ] Admin UI for live policy editing and audit search
+- [ ] Pluggable approval-delivery channels (chat, mobile push, email)
+
+## License
+
+MIT — © 2026 Todd Smith. See [LICENSE](LICENSE).
