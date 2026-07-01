@@ -17,3 +17,9 @@ venv/
 !.env.example
 *.swp
 .DS_Store
+
+# Keys / certs / large artifacts
+*.key
+*.pem
+/data
+/models
