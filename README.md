@@ -6,7 +6,7 @@
 <!-- Badges: update the CI badge path if the workflow file is renamed. -->
 [![ci](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/test.yml/badge.svg)](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/test.yml)
 [![lint](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/lint.yml/badge.svg)](https://github.com/SurgeXi/surge-orchestrator/actions/workflows/lint.yml)
-[![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-source--available-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.12-blue.svg)](pyproject.toml)
 
 The **Surge Orchestration Layer (SOL)** is a FastAPI service that converges three
