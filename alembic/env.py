@@ -6,8 +6,9 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 HERE = os.path.dirname(__file__)
 SRC = os.path.abspath(os.path.join(HERE, "..", "src"))
@@ -15,8 +16,8 @@ if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
 # noqa: E402 — sys.path adjusted above
-from sol.db import Base  # noqa: E402
 from sol import models as _models  # noqa: E402,F401  (register all tables)
+from sol.db import Base  # noqa: E402
 
 config = context.config
 

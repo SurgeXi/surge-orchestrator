@@ -29,8 +29,8 @@ and returns the matched playbook name (for the audit reason) or None.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 
 @dataclass(frozen=True)
@@ -156,7 +156,7 @@ def registered_playbooks() -> tuple[RemediationPlaybook, ...]:
     return _PLAYBOOKS
 
 
-def classify_remediation(payload_args: dict) -> Optional[str]:
+def classify_remediation(payload_args: dict) -> str | None:
     """Return the matched curated playbook name, or None.
 
     This is the SOL allow-list gate for the auto-remediation lane. It returns a
@@ -165,7 +165,6 @@ def classify_remediation(payload_args: dict) -> Optional[str]:
     before acting on a non-None result. Fail CLOSED on any error.
     """
     try:
-        capability = str(payload_args.get("capability", "") or payload_args.get("tool", ""))
         for pb in _PLAYBOOKS:
             # Match either by the SOL capability id or the underlying tool name;
             # the per-playbook ``matches`` predicate is the real structural gate.

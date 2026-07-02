@@ -16,8 +16,9 @@ Create Date: 2026-06-03
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "0006_sol_token_audit"
 down_revision = "0005_sol_learned_tiers"
