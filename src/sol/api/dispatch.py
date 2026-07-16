@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import shlex
 import time
 import uuid
 from datetime import UTC, datetime
@@ -83,6 +84,82 @@ def _needs_human(cap: Capability | None, args: dict) -> bool:
     return risk in _HUMAN_RISK_BANDS
 
 
+# ---- Auto-readonly lane: Surge autonomy for provably read-only host ops ----
+# A run_bash whose command is a single pipeline of allow-listed read-only
+# binaries with NO redirect / substitution / backgrounding / chaining /
+# network / find-write-action. Allow-list, not deny-list; fail CLOSED on any
+# ambiguity. awk/sed/xargs/env are EXCLUDED (can write or exec without a
+# shell redirect). The systemd sandbox remains the hard floor underneath.
+_READONLY_BINARIES = frozenset({
+    "find", "ls", "stat", "du", "df", "cat", "head", "tail", "wc", "grep",
+    "egrep", "fgrep", "zgrep", "sort", "uniq", "cut", "file", "sha256sum",
+    "md5sum", "echo", "printf", "tr", "nl", "basename", "dirname", "realpath",
+    "readlink", "pwd", "whoami", "uname", "free", "uptime",
+    "column", "comm", "tac", "rev", "jq", "tree", "id",
+})
+# NOTE: `date` and `hostname` are intentionally NOT allow-listed. Both have
+# state-changing invocations (`date -s/--set` sets the clock; `hostname NAME`
+# / `hostname -b` sets the hostname). Their read value is covered by
+# uname/uptime/free, so we fail CLOSED rather than try to distinguish their
+# read vs write forms.
+_READONLY_FORBIDDEN_FLAGS = frozenset({
+    "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls",
+})
+# Per-binary write/state-change flags. Each entry: (short_letters, long_flags).
+#   short_letters: single chars that, if present in ANY combined short-flag
+#     bundle (a token like `-rno` or `-o/tmp/x`), mean a write -> reject.
+#   long_flags: `--name` forms; reject if token == it or starts with `--name=`.
+# This catches glued (`-o/tmp/x`), `--output=FILE`, separated (`-o /tmp/x`),
+# combined (`-rno FILE`), quoted, pipeline-stage, and abs-path forms alike.
+_BINARY_WRITE_FLAGS = {
+    "sort": (frozenset({"o"}), ("--output",)),
+}
+
+
+def classify_readonly(payload_args: dict) -> bool:
+    """True only for a run_bash whose command is provably read-only: a pipeline
+    of allow-listed read-only binaries with no redirect, command substitution,
+    backgrounding, chaining, or find/-exec-style write action. Fail CLOSED."""
+    try:
+        if str(payload_args.get("tool", "")) != "run_bash":
+            return False
+        cmd = (payload_args.get("args", {}) or {}).get("cmd", "")
+        if not isinstance(cmd, str) or not cmd.strip():
+            return False
+        if any(t in cmd for t in (">", "<", "`", "$(", "${", "&", ";", "\n", "\r")):
+            return False
+        for segment in cmd.split("|"):
+            try:
+                toks = shlex.split(segment)
+            except ValueError:
+                return False
+            if not toks:
+                return False
+            binary = toks[0].rsplit("/", 1)[-1]
+            if binary not in _READONLY_BINARIES:
+                return False
+            short_writes, long_writes = _BINARY_WRITE_FLAGS.get(
+                binary, (frozenset(), ())
+            )
+            for t in toks:
+                if t in _READONLY_FORBIDDEN_FLAGS or t.startswith("-exec"):
+                    return False
+                # Per-binary write-flag denylist (e.g. `sort -o FILE`).
+                if t.startswith("--"):
+                    head = t.split("=", 1)[0]
+                    if head in long_writes:
+                        return False
+                elif t.startswith("-") and len(t) > 1 and short_writes:
+                    # Combined short-flag bundle: reject if any write letter
+                    # appears before its (possibly glued) argument. Scan the
+                    # cluster up to the first non-flag char of a value.
+                    if any(ch in short_writes for ch in t[1:]):
+                        return False
+        return True
+    except Exception:
+        return False
+
+
 @router.post("/dispatch", response_model=DispatchResponse, status_code=200)
 def dispatch(
     request: Request,
@@ -124,6 +201,12 @@ def dispatch(
         remediation_name = classify_remediation(payload.args)
         if remediation_name is not None:
             needs_human = False
+    # Auto-readonly lane: a provably read-only run_bash that would otherwise be
+    # human-gated is auto-approved. Mutating/remote/deploy work stays gated.
+    auto_readonly = False
+    if needs_human and s.auto_readonly and classify_readonly(payload.args):
+        needs_human = False
+        auto_readonly = True
 
     # ---------- cross-rule evaluation (Phase 3.4) ----------
     # Cross-rules run BEFORE approval / executor for non-shadow paths.
@@ -166,9 +249,14 @@ def dispatch(
             decision_path = "auto-remediation"
             reason = f"remediation:{remediation_name}"
         else:
-            decision = "approved"
-            decision_path = "auto-policy"
-            reason = "auto_under_threshold"
+            if auto_readonly:
+                decision = "approved"
+                decision_path = "auto-readonly"
+                reason = "readonly_allowlisted"
+            else:
+                decision = "approved"
+                decision_path = "auto-policy"
+                reason = "auto_under_threshold"
 
     row = Dispatch(
         audit_id=audit_id,
