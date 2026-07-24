@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # This is a SEPARATE flag from auto_readonly: it gates a tiny
     # allow-list of pre-vetted SAFE-WRITE remediations, not read-only ops.
     auto_remediation: bool = False
+    # Separate flag: gates the auto-sandbox-write lane. A write_file whose
+    # destination is provably inside /tmp/academy/ (throwaway scratch) is
+    # auto-approved; every other write stays human-gated. Fail-closed.
+    auto_sandbox_write: bool = False
     # Auto-approve provably read-only run_bash (allow-listed binaries,
     # fail-closed). Writes/deletes/network/service-control/deploys stay gated.
     auto_readonly: bool = False

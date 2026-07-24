@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shlex
 import time
 import uuid
@@ -151,6 +152,37 @@ def classify_readonly(payload_args: dict) -> bool:
         return False
 
 
+# ---- Auto-sandbox-write lane: pre-authorized throwaway scratch space ----
+# A write_file whose destination resolves strictly inside /tmp/academy/ is
+# auto-approved. Zero blast radius (throwaway sandbox); every write to any
+# other path stays human-gated. Allow-list, fail CLOSED on any ambiguity or
+# path-escape. Gated behind SOL_AUTO_SANDBOX_WRITE.
+_SANDBOX_WRITE_PREFIX = "/tmp/academy/"
+
+
+def classify_sandbox_write(payload_args: dict) -> bool:
+    """True only for a write_file whose destination is provably inside the
+    /tmp/academy/ sandbox prefix. Fail CLOSED."""
+    try:
+        if str(payload_args.get("tool", "")) != "write_file":
+            return False
+        path = (payload_args.get("args", {}) or {}).get("path", "")
+        if not isinstance(path, str) or not path.strip():
+            return False
+        # Reject any traversal or non-absolute form before normalizing.
+        if ".." in path or "\x00" in path or not path.startswith("/"):
+            return False
+        norm = os.path.normpath(path)
+        # Must stay strictly UNDER the sandbox dir (not the bare dir).
+        if not norm.startswith(_SANDBOX_WRITE_PREFIX):
+            return False
+        if norm == _SANDBOX_WRITE_PREFIX.rstrip("/"):
+            return False
+        return True
+    except Exception:
+        return False
+
+
 @router.post("/dispatch", response_model=DispatchResponse, status_code=200)
 def dispatch(
     payload: DispatchRequest,
@@ -187,6 +219,17 @@ def dispatch(
         needs_human = False
         auto_readonly = True
 
+    # Auto-sandbox-write lane: a write_file confined to /tmp/academy/ is
+    # auto-approved (zero blast radius). Any other write stays gated.
+    auto_sandbox_write = False
+    if (
+        needs_human
+        and getattr(s, "auto_sandbox_write", False)
+        and classify_sandbox_write(payload.args)
+    ):
+        needs_human = False
+        auto_sandbox_write = True
+
     # Auto-remediation lane (DEFAULT OFF): a dispatch that EXACTLY matches a
     # curated, pre-vetted remediation playbook (bounded + reversible +
     # idempotent) may be auto-approved instead of human-gated -- ONLY when
@@ -218,6 +261,10 @@ def dispatch(
                 decision = "approved"
                 decision_path = "auto-readonly"
                 reason = "readonly_allowlisted"
+            elif auto_sandbox_write:
+                decision = "approved"
+                decision_path = "auto-sandbox-write"
+                reason = "sandbox_allowlisted"
             else:
                 decision = "approved"
                 decision_path = "auto-policy"
