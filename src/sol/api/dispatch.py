@@ -1,4 +1,3 @@
-# Copyright © 2026 SurgeXi Business Intelligence, a Teamsmith Enterprises LLC company. All Rights Reserved.
 """POST /v1/sol/dispatch — single entry point for every side-effect.
 
 Phase 3.2 Week 2 modes:
@@ -19,41 +18,28 @@ Decision policy (Week 2 — pre-policy-engine):
   - Else if args.risk ∈ {mutate, remote, destructive} → human approval.
   - Else → auto-approved.
 
-Cross-rule evaluation (Phase 3.4 Week 4):
-  - Before deciding requires-human/auto, evaluate cross-rule
-    constraints (e.g. ``repo_cooldown``) against recent dispatch
-    history. A cross-rule denial wins immediately — no approval is
-    created, no executor is called.
-
-Executor dispatch (Phase 3.4 Week 4):
-  - When the final decision is ``approved`` (auto or human),
-    SOL invokes the executor registered for the capability's
-    ``handler_kind``. Result is recorded back into the dispatches
-    row (``result_status``, ``result_summary``, ``executed_at``).
+The full policy engine + tier learning slots in Week 3-5 between the
+"needs human?" check and the executor dispatch.
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import shlex
 import time
 import uuid
-from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..executors.broker import execute_broker
-from ..executors.surge_runner import execute_runner
 from ..models import Capability, Dispatch
 from ..observability.logging import get_logger
 from ..observability.metrics import dispatch_latency_seconds, dispatches_total
-from ..policy.cross_rules import evaluate_repo_cooldown
-from ..policy.remediation import classify_remediation
 from ..schemas.dispatch import DispatchRequest, DispatchResponse, DispatchResult
 from ..services.approvals import create_and_deliver, poll_for_decision
+from ..policy.remediation import classify_remediation
 from ..settings import get_settings
 from .deps import CallerContext, get_caller
 
@@ -96,6 +82,11 @@ _READONLY_BINARIES = frozenset({
     "md5sum", "echo", "printf", "tr", "nl", "basename", "dirname", "realpath",
     "readlink", "pwd", "whoami", "uname", "free", "uptime",
     "column", "comm", "tac", "rev", "jq", "tree", "id",
+    # CPU/disk-topology readers (2026-07-24, Academy wb-009). Pure readers of
+    # /proc and /sys with no write/exec/network invocation and no output-file
+    # flag; the metachar guard + per-stage allowlist still block redirects and
+    # chaining (lscpu | head passes; lscpu > f / lscpu; rm still fail closed).
+    "lscpu", "nproc", "lsblk",
 })
 # NOTE: `date` and `hostname` are intentionally NOT allow-listed. Both have
 # state-changing invocations (`date -s/--set` sets the clock; `hostname NAME`
@@ -162,7 +153,6 @@ def classify_readonly(payload_args: dict) -> bool:
 
 @router.post("/dispatch", response_model=DispatchResponse, status_code=200)
 def dispatch(
-    request: Request,
     payload: DispatchRequest,
     caller: CallerContext = Depends(get_caller),
     db: Session = Depends(get_db),
@@ -190,17 +180,6 @@ def dispatch(
     cap = db.get(Capability, payload.capability)
     needs_human = _needs_human(cap, payload.args)
 
-    # ---------- auto-remediation lane (DEFAULT OFF) ----------
-    # A dispatch that EXACTLY matches a curated, pre-vetted remediation
-    # playbook (bounded + reversible + idempotent) may be auto-approved
-    # instead of human-gated -- ONLY when SOL_AUTO_REMEDIATION is on.
-    # Allow-list, fail-closed: anything not matched stays human-gated.
-    # The cross-rule check below still applies; a cross-rule denial wins.
-    remediation_name: str | None = None
-    if needs_human and s.auto_remediation:
-        remediation_name = classify_remediation(payload.args)
-        if remediation_name is not None:
-            needs_human = False
     # Auto-readonly lane: a provably read-only run_bash that would otherwise be
     # human-gated is auto-approved. Mutating/remote/deploy work stays gated.
     auto_readonly = False
@@ -208,26 +187,16 @@ def dispatch(
         needs_human = False
         auto_readonly = True
 
-    # ---------- cross-rule evaluation (Phase 3.4) ----------
-    # Cross-rules run BEFORE approval / executor for non-shadow paths.
-    # A denial here short-circuits — no approval row, no executor call.
-    cross_denied = False
-    cross_reason: str | None = None
-    cross_rule_name: str | None = None
-    if not shadow_mode:
-        cache = getattr(request.app.state, "policy_cache", None)
-        if cache is not None:
-            cr = evaluate_repo_cooldown(
-                db=db,
-                capability=payload.capability,
-                tenant_id=ctx_tenant,
-                args=payload.args or {},
-                cache=cache,
-            )
-            if not cr.allowed:
-                cross_denied = True
-                cross_reason = cr.reason
-                cross_rule_name = cr.rule
+    # Auto-remediation lane (DEFAULT OFF): a dispatch that EXACTLY matches a
+    # curated, pre-vetted remediation playbook (bounded + reversible +
+    # idempotent) may be auto-approved instead of human-gated -- ONLY when
+    # SOL_AUTO_REMEDIATION is on. Allow-list, fail-closed. Runs alongside the
+    # auto-readonly lane above; a request matches at most one.
+    remediation_name: str | None = None
+    if needs_human and s.auto_remediation:
+        remediation_name = classify_remediation(payload.args)
+        if remediation_name is not None:
+            needs_human = False
 
     # ---------- audit row written for EVERY dispatch ----------
     decision = "shadow"
@@ -236,20 +205,16 @@ def dispatch(
     approval_id: uuid.UUID | None = None
 
     if not shadow_mode:
-        if cross_denied:
-            decision = "denied"
-            decision_path = f"cross-rule-{cross_rule_name or 'deny'}"
-            reason = cross_reason
-        elif needs_human:
+        if needs_human:
             decision = "queued"
             decision_path = "human-approval"
             reason = "requires_human"
-        elif remediation_name is not None:
-            decision = "approved"
-            decision_path = "auto-remediation"
-            reason = f"remediation:{remediation_name}"
         else:
-            if auto_readonly:
+            if remediation_name is not None:
+                decision = "approved"
+                decision_path = "auto-remediation"
+                reason = f"remediation:{remediation_name}"
+            elif auto_readonly:
                 decision = "approved"
                 decision_path = "auto-readonly"
                 reason = "readonly_allowlisted"
@@ -286,10 +251,12 @@ def dispatch(
     db.refresh(row)
     dispatch_pk = row.id
 
-    if not shadow_mode and not cross_denied and needs_human:
+    if not shadow_mode and needs_human:
         # Create approval + fan out delivery. Sync wrapper around the
         # async service for the sync FastAPI handler — Python 3.12's
         # ``asyncio.run`` is fine because dispatch handlers are sync.
+        import asyncio
+
         approval = asyncio.run(
             create_and_deliver(
                 db=db,
@@ -321,17 +288,12 @@ def dispatch(
                 row.decision_reason = reason
                 db.commit()
 
-    # ---------- executor dispatch (Phase 3.3 + 3.4) ----------
-    # When decision is "approved" (auto-policy OR human-approval-callback)
-    # we route to the appropriate executor. Two paths:
-    #   - Phase 3.3: broker dispatch by capability name (broker_capability,
-    #     broker_dispatch). Wraps Broker /v1/surge/dispatch with bypass.
-    #   - Phase 3.4: surge-runner dispatch by cap.handler_kind == 'surge_runner'.
-    # The two paths are non-overlapping; broker caps don't carry the
-    # surge_runner handler_kind. DENIED / QUEUED outcomes do NOT execute.
-    result: DispatchResult | None = None
-
     # ---------- Phase 3.3: forward approved broker dispatches ----------
+    # When the dispatch's capability is one of the broker-handled ones
+    # and the decision came out APPROVED (auto-policy or human-approved
+    # callback), forward to Broker's executor and record the result on
+    # the audit row. DENIED / QUEUED outcomes do NOT execute.
+    executor_result: DispatchResult | None = None
     if (
         not shadow_mode
         and payload.capability in _BROKER_CAPABILITIES
@@ -354,11 +316,13 @@ def dispatch(
             )
             outcome = str(br.get("outcome") or "error")
             summary = str(br.get("summary") or "")[:1024]
-            row.executed_at = datetime.now(tz=UTC)
+            from datetime import datetime, timezone
+
+            row.executed_at = datetime.now(tz=timezone.utc)
             row.result_status = outcome
             row.result_summary = summary
             db.commit()
-            result = DispatchResult(
+            executor_result = DispatchResult(
                 status=outcome,
                 summary=summary or None,
                 stdout=None,
@@ -381,55 +345,6 @@ def dispatch(
                 outcome,
                 ctx_tenant,
             )
-
-    # ---------- Phase 3.4: surge-runner executor ----------
-    if (
-        not shadow_mode
-        and decision == "approved"
-        and cap is not None
-        and result is None
-    ):
-        handler_kind = getattr(cap, "handler_kind", None)
-        if handler_kind == "surge_runner":
-            exec_started = time.monotonic()
-            try:
-                exec_result = asyncio.run(
-                    execute_runner(payload.capability, payload.args or {})
-                )
-            except Exception as e:  # pragma: no cover - defensive
-                log.exception("sol.dispatch.executor_crash", capability=payload.capability)
-                exec_result = {
-                    "status": "error",
-                    "stdout": None,
-                    "stderr": f"{type(e).__name__}: {e}",
-                    "exit_code": 99,
-                    "summary": "executor crash",
-                }
-            exec_elapsed_ms = int((time.monotonic() - exec_started) * 1000)
-            row.executed_at = datetime.now(UTC)
-            row.result_status = exec_result.get("status")
-            row.result_summary = exec_result.get("summary")
-            row.latency_ms = exec_elapsed_ms
-            if exec_result.get("status") == "success":
-                decision = "executed"
-                decision_path = decision_path + "+executed"
-                row.decision = decision
-                row.decision_path = decision_path
-            else:
-                # Executor failure — leave decision="approved" but record
-                # the result so the audit row tells the full story. The
-                # response decision below reflects the executor outcome
-                # via the result.status field.
-                decision_path = decision_path + "+executor-error"
-                row.decision_path = decision_path
-            db.commit()
-            try:
-                result = DispatchResult(**exec_result)
-            except Exception:  # pragma: no cover - schema fallback
-                result = DispatchResult(
-                    status=str(exec_result.get("status") or "error"),
-                    summary=str(exec_result.get("summary") or ""),
-                )
 
     elapsed = time.monotonic() - started
     dispatch_latency_seconds.labels(
@@ -457,7 +372,7 @@ def dispatch(
         decision=decision,
         audit_id=audit_id,
         trace_id=payload.context.trace_id,
-        result=result,
+        result=executor_result,
         approval_id=approval_id,
         decision_path=decision_path,
         decision_reason=reason,
